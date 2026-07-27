@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# API Keys & Config (contains Gemini/Groq keys — never commit)
+config.json
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# Electron build output
+dist/
+out/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*

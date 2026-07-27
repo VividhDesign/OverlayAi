@@ -1,0 +1,12 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  hideWindow:      ()          => ipcRenderer.send('hide-window'),
+  quitApp:         ()          => ipcRenderer.send('quit-app'),
+  resizeWindow:    (w, h)      => ipcRenderer.send('resize-window', { width: w, height: h }),
+  getConfig:       ()          => ipcRenderer.invoke('get-config'),
+  saveConfig:      (data)      => ipcRenderer.invoke('save-config', data),
+  onScreenshot:    (cb)        => ipcRenderer.on('screenshot-captured', (_, d) => cb(d)),
+  onScreenshotError:(cb)       => ipcRenderer.on('screenshot-error',    (_, e) => cb(e)),
+  onNewChat:       (cb)        => ipcRenderer.on('new-chat',             ()    => cb()),
+});
