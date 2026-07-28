@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OverlayAi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0d0d18;
+      --sidebar:      #111120;
+      --surface:      rgba(255,255,255,0.05);
+      --surface-hover:rgba(255,255,255,0.09);
+      --border:       rgba(255,255,255,0.08);
+      --text:         #e8e8f0;
+      --text-muted:   rgba(232,232,240,0.45);
+      --accent:       #5c6bc0;
+      --accent-glow:  rgba(92,107,192,0.3);
+      --gemini:       #1a73e8;
+      --groq:         #f55036;
+      --openai:       #10a37f;
+      --claude:       #d97706;
+      --ollama:       #4ade80;
+      --red:          #ef5350;
+      --green:        #4caf50;
+      --radius:       14px;
+      --font:         'Inter', -apple-system, sans-serif;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .app { display: flex; height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0 16px;
+      -webkit-app-region: drag;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 18px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+      -webkit-app-region: drag;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .logo-text { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; }
+    .logo-sub  { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+    .nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 8px; -webkit-app-region: no-drag; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      text-align: left;
+      width: 100%;
+      -webkit-app-region: no-drag;
+    }
+    .nav-item:hover  { background: var(--surface); color: var(--text); }
+    .nav-item.active { background: var(--surface-hover); color: var(--text); }
+    .nav-icon { font-size: 15px; flex-shrink: 0; }
+
+    .sidebar-footer { padding: 0 8px; -webkit-app-region: no-drag; }
+    .launch-btn {
+      width: 100%;
+      padding: 11px 16px;
+      border-radius: 10px; border: none;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      color: #fff;
+      font-family: var(--font);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(92,107,192,0.4);
+      letter-spacing: 0.01em;
+      -webkit-app-region: no-drag;
+    }
+    .launch-btn:hover  { opacity: 0.9; box-shadow: 0 6px 28px rgba(92,107,192,0.55); }
+    .launch-btn:active { transform: scale(0.97); }
+
+    /* ── Main content ── */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      -webkit-app-region: drag;
+    }
+    .content::-webkit-scrollbar { width: 4px; }
+    .content::-webkit-scrollbar-track { background: transparent; }
+    .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    /* Tab pages */
+    .page { display: none; flex-direction: column; gap: 16px; -webkit-app-region: no-drag; }
+    .page.active { display: flex; }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+    .page-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+
+    /* ── Provider Cards ── */
+    .providers-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .provider-card {
+      background: rgba(255,255,255,0.03);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .provider-card:hover { border-color: rgba(255,255,255,0.14); }
+    .provider-card.connected { border-color: rgba(76,175,80,0.4); }
+
+    .provider-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .provider-badge {
+      width: 34px; height: 34px;
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .provider-info { flex: 1; }
+    .provider-name { font-size: 13px; font-weight: 600; }
+    .provider-desc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .provider-status {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .provider-status.ok { background: rgba(76,175,80,0.15); color: var(--green); }
+
+    .provider-body {
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .provider-body.open { display: flex; }
+
+    .field-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .input-row { display: flex; gap: 8px; align-items: center; }
+    .key-input {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+      letter-spacing: 0.02em;
+      padding: 8px 11px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .key-input:focus { border-color: var(--accent); }
+    .key-input::placeholder { color: var(--text-muted); font-family: var(--font); letter-spacing: 0; }
+
+    .eye-btn, .save-key-btn {
+      border-radius: 7px; border: none;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+      font-family: var(--font);
+    }
+    .eye-btn     { width: 30px; height: 30px; border: 1px solid var(--border); }
+    .eye-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .save-key-btn {
+      height: 30px;
+      padding: 0 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      border: none;
+    }
+    .save-key-btn:hover { opacity: 0.85; }
+    .save-key-btn:active { transform: scale(0.96); }
+
+    .field-hint { font-size: 10px; color: var(--text-muted); }
+    .field-hint a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .field-hint a:hover { text-decoration: underline; }
+
+    /* Ollama row */
+    .ollama-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .ollama-status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .ollama-status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .ollama-status-dot.error  { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+    .ollama-status-text { font-size: 11px; color: var(--text-muted); flex: 1; }
+    .check-ollama-btn {
+      padding: 5px 12px;
+      border-radius: 7px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .check-ollama-btn:hover { background: var(--surface-hover); }
+
+    /* ── Key Bindings Page ── */
+    .keybind-section { display: flex; flex-direction: column; gap: 12px; }
+    .kb-card {
+      background: rgba(255,255,255,0.03);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .kb-row { display: flex; align-items: center; gap: 10px; }
+    .keybind-recorder {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .keybind-recorder:hover { background: var(--surface-hover); border-color: rgba(255,255,255,0.15); }
+    .keybind-recorder.recording {
+      border-color: var(--accent);
+      background: rgba(92,107,192,0.1);
+      animation: pulse-border 1s infinite;
+    }
+    @keyframes pulse-border { 0%,100% { border-color: var(--accent); } 50% { border-color: rgba(92,107,192,0.3); } }
+    .keybind-display { font-family: 'Courier New', monospace; font-size: 13px; font-weight: 700; color: var(--text); }
+    .keybind-hint    { font-size: 10px; color: var(--text-muted); }
+    .reset-btn {
+      width: 30px; height: 30px;
+      border-radius: 7px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-muted);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .reset-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .save-kb-btn {
+      padding: 9px 20px;
+      border-radius: 9px; border: none;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      align-self: flex-end;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .save-kb-btn:hover  { opacity: 0.85; }
+    .save-kb-btn:active { transform: scale(0.97); }
+    .kb-hint { font-size: 10.5px; color: var(--text-muted); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: rgba(30,30,50,0.97);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 18px;
+      font-size: 12px; color: var(--text);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 9999; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error   { border-color: var(--red);   color: var(--red); }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">✦</div>
+      <div>
+        <div class="logo-text">OverlayAi</div>
+        <div class="logo-sub">AI Desktop Assistant</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" id="navProviders">
+        <span class="nav-icon">🔑</span> AI Providers
+      </button>
+      <button class="nav-item" id="navKeybinds">
+        <span class="nav-icon">⌨</span> Key Bindings
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="launch-btn" id="launchOverlayBtn">
+        ✦ Launch Overlay
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <!-- AI Providers Page -->
+    <div class="page active" id="pageProviders">
+      <div class="page-title">AI Providers</div>
+      <div class="page-sub">Connect your AI providers. Keys are stored locally — never sent anywhere except their respective APIs.</div>
+
+      <div class="providers-grid">
+
+        <!-- Gemini -->
+        <div class="provider-card" id="cardGemini">
+          <div class="provider-header" data-card="gemini">
+            <div class="provider-badge" style="background:rgba(26,115,232,0.15);">✦</div>
+            <div class="provider-info">
+              <div class="provider-name">Google Gemini</div>
+              <div class="provider-desc">Gemini 2.5 Flash, Pro, and more</div>
+            </div>
+            <div class="provider-status" id="statusGemini">Not set</div>
+          </div>
+          <div class="provider-body" id="bodyGemini">
+            <div>
+              <div class="field-label">API Key</div>
+              <div class="input-row">
+                <input type="password" id="geminiKey" class="key-input" placeholder="AIza…" autocomplete="off"/>
+                <button class="eye-btn" data-target="geminiKey">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="save-key-btn" style="background:var(--gemini);" data-provider="gemini">Save</button>
+              </div>
+              <div class="field-hint" style="margin-top:5px;">Get a free key at <a data-href="https://aistudio.google.com/app/apikey">aistudio.google.com</a></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Groq -->
+        <div class="provider-card" id="cardGroq">
+          <div class="provider-header" data-card="groq">
+            <div class="provider-badge" style="background:rgba(245,80,54,0.15);">⚡</div>
+            <div class="provider-info">
+              <div class="provider-name">Groq</div>
+              <div class="provider-desc">Ultra-fast inference — Llama, Mixtral, Gemma</div>
+            </div>
+            <div class="provider-status" id="statusGroq">Not set</div>
+          </div>
+          <div class="provider-body" id="bodyGroq">
+            <div>
+              <div class="field-label">API Key</div>
+              <div class="input-row">
+                <input type="password" id="groqKey" class="key-input" placeholder="gsk_…" autocomplete="off"/>
+                <button class="eye-btn" data-target="groqKey">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="save-key-btn" style="background:var(--groq);" data-provider="groq">Save</button>
+              </div>
+              <div class="field-hint" style="margin-top:5px;">Get a free key at <a data-href="https://console.groq.com/keys">console.groq.com</a></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OpenAI -->
+        <div class="provider-card" id="cardOpenai">
+          <div class="provider-header" data-card="openai">
+            <div class="provider-badge" style="background:rgba(16,163,127,0.15);">🤖</div>
+            <div class="provider-info">
+              <div class="provider-name">OpenAI (ChatGPT)</div>
+              <div class="provider-desc">GPT-4o, GPT-4 Turbo, and o1 models</div>
+            </div>
+            <div class="provider-status" id="statusOpenai">Not set</div>
+          </div>
+          <div class="provider-body" id="bodyOpenai">
+            <div>
+              <div class="field-label">API Key</div>
+              <div class="input-row">
+                <input type="password" id="openaiKey" class="key-input" placeholder="sk-…" autocomplete="off"/>
+                <button class="eye-btn" data-target="openaiKey">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="save-key-btn" style="background:var(--openai);" data-provider="openai">Save</button>
+              </div>
+              <div class="field-hint" style="margin-top:5px;">Get key at <a data-href="https://platform.openai.com/api-keys">platform.openai.com</a></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Claude -->
+        <div class="provider-card" id="cardClaude">
+          <div class="provider-header" data-card="claude">
+            <div class="provider-badge" style="background:rgba(217,119,6,0.15);">🧠</div>
+            <div class="provider-info">
+              <div class="provider-name">Anthropic Claude</div>
+              <div class="provider-desc">Claude 3.5 Sonnet, Haiku, and Opus</div>
+            </div>
+            <div class="provider-status" id="statusClaude">Not set</div>
+          </div>
+          <div class="provider-body" id="bodyOpenai">
+            <div>
+              <div class="field-label">API Key</div>
+              <div class="input-row">
+                <input type="password" id="claudeKey" class="key-input" placeholder="sk-ant-…" autocomplete="off"/>
+                <button class="eye-btn" data-target="claudeKey">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="save-key-btn" style="background:var(--claude);" data-provider="claude">Save</button>
+              </div>
+              <div class="field-hint" style="margin-top:5px;">Get key at <a data-href="https://console.anthropic.com/account/keys">console.anthropic.com</a></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ollama -->
+        <div class="provider-card" id="cardOllama">
+          <div class="provider-header" data-card="ollama">
+            <div class="provider-badge" style="background:rgba(74,222,128,0.1);">🦙</div>
+            <div class="provider-info">
+              <div class="provider-name">Ollama (Local)</div>
+              <div class="provider-desc">Run models 100% locally — no API key needed</div>
+            </div>
+            <div class="provider-status" id="statusOllama">Checking…</div>
+          </div>
+          <div class="provider-body" id="bodyOllama">
+            <div class="ollama-row">
+              <div class="ollama-status-dot" id="ollamaDot"></div>
+              <div class="ollama-status-text" id="ollamaText">Checking Ollama at localhost:11434…</div>
+              <button class="check-ollama-btn" id="checkOllamaBtn">Check Again</button>
+            </div>
+            <div class="field-hint">Install from <a data-href="https://ollama.ai">ollama.ai</a> then run <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-size:10px;">ollama serve</code></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Key Bindings Page -->
+    <div class="page" id="pageKeybinds">
+      <div class="page-title">Key Bindings</div>
+      <div class="page-sub">Global shortcuts — work system-wide even when the overlay is hidden.</div>
+
+      <div class="keybind-section">
+        <div class="kb-card">
+          <div class="field-label">Toggle Overlay Visibility</div>
+          <div class="kb-row">
+            <div class="keybind-recorder" id="recToggle">
+              <span class="keybind-display" id="dispToggle">⌘⇧Space</span>
+              <span class="keybind-hint"    id="hintToggle">click to record</span>
+            </div>
+            <button class="reset-btn" data-reset="toggle" title="Reset to default">↺</button>
+          </div>
+        </div>
+
+        <div class="kb-card">
+          <div class="field-label">Screenshot / Screen Capture</div>
+          <div class="kb-row">
+            <div class="keybind-recorder" id="recScreenshot">
+              <span class="keybind-display" id="dispScreenshot">⌘⇧S</span>
+              <span class="keybind-hint"    id="hintScreenshot">click to record</span>
+            </div>
+            <button class="reset-btn" data-reset="screenshot" title="Reset to default">↺</button>
+          </div>
+        </div>
+
+        <div class="kb-hint">Click a recorder, then press your desired key combination. Shortcuts re-register immediately.</div>
+        <button class="save-kb-btn" id="saveKbBtn">Save Key Bindings</button>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+<script src="launcher-renderer.js"></script>
+</body>
+</html>

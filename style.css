@@ -139,6 +139,17 @@ body {
 }
 .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
 
+/* ── Settings button — slightly highlighted so it's clearly visible ── */
+.settings-icon-btn {
+  color: rgba(232,232,240,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.settings-icon-btn:hover {
+  color: #fff;
+  background: rgba(92,107,192,0.25);
+  border-color: rgba(92,107,192,0.5);
+}
+
 /* ── Settings Modal (full-panel) ── */
 .settings-modal {
   position: absolute;

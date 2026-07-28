@@ -114,26 +114,26 @@ async function switchProvider(p) {
   } else if (p === 'groq') {
     setStatus('groq-active');
     if (!groqApiKey) {
-      settingsPanel.style.display = 'block';
-      showInfo('Enter your Groq API key in settings above ☝');
+      window.electronAPI.openSettings();
+      showInfo('Enter your Groq API key in the Settings window ⚙');
     } else {
       await loadGroqModels();
     }
   } else {
     setStatus('gemini-active');
     if (!geminiApiKey) {
-      settingsPanel.style.display = 'block';
-      showInfo('Enter your Gemini API key in settings above ☝');
+      window.electronAPI.openSettings();
+      showInfo('Enter your Gemini API key in the Settings window ⚙');
     } else {
       await loadGeminiModels();
     }
   }
 }
 
-// ─── Settings Modal ───────────────────────────────────────────────────────────
+// ─── Settings Window ──────────────────────────────────────────────────────────
 
-// Open / close
-settingsBtn.addEventListener('click', () => { settingsModal.style.display = 'flex'; });
+// Open dedicated native settings window (normal macOS window, not overlay)
+settingsBtn.addEventListener('click', () => window.electronAPI.openSettings());
 settingsCloseBtn.addEventListener('click', closeSettings);
 function closeSettings() {
   settingsModal.style.display = 'none';
@@ -609,7 +609,7 @@ function clearChat(showWelcome = true) {
       <div class="welcome-icon">${icon}</div>
       <div class="welcome-title">${title}</div>
       <div class="welcome-sub">Running ${sub}</div>
-      <div class="shortcut-hint"><kbd>⌘⇧Space</kbd> hide &nbsp;·&nbsp; <kbd>⌘⇧S</kbd> screenshot</div>
+      <div class="shortcut-hint"><kbd>⌃⌥Space</kbd> hide &nbsp;·&nbsp; <kbd>⌘⇧S</kbd> screenshot</div>
     `;
     messagesEl.appendChild(el);
     welcomeEl = el;
@@ -625,11 +625,11 @@ async function sendMessage() {
   const model = modelSelect.value;
   if (!model) { showError('Please select a model first.'); return; }
   if (currentProvider === 'gemini' && !geminiApiKey) {
-    settingsPanel.style.display = 'block';
+    window.electronAPI.openSettings();
     showError('⚠️ Enter your Gemini API key first.'); return;
   }
   if (currentProvider === 'groq' && !groqApiKey) {
-    settingsPanel.style.display = 'block';
+    window.electronAPI.openSettings();
     showError('⚠️ Enter your Groq API key first.'); return;
   }
 
