@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onScreenshot:    (cb)        => ipcRenderer.on('screenshot-captured', (_, d) => cb(d)),
   onScreenshotError:(cb)       => ipcRenderer.on('screenshot-error',    (_, e) => cb(e)),
   onNewChat:       (cb)        => ipcRenderer.on('new-chat',             ()    => cb()),
+  updateShortcuts: (shortcuts) => ipcRenderer.invoke('update-shortcuts', shortcuts),
+  openExternal:    (url)       => ipcRenderer.send('open-external', url),
 });

@@ -26,15 +26,25 @@ const quitBtn          = document.getElementById('quitBtn');
 const tabOllama        = document.getElementById('tabOllama');
 const tabGemini        = document.getElementById('tabGemini');
 const tabGroq          = document.getElementById('tabGroq');
-const settingsBtn      = document.getElementById('settingsBtn');
-const settingsPanel    = document.getElementById('settingsPanel');
-const apiKeyInput      = document.getElementById('apiKeyInput');
-const saveKeyBtn       = document.getElementById('saveKeyBtn');
-const groqKeyInput     = document.getElementById('groqKeyInput');
-const saveGroqKeyBtn   = document.getElementById('saveGroqKeyBtn');
+const settingsBtn         = document.getElementById('settingsBtn');
+const settingsModal       = document.getElementById('settingsModal');
+const settingsCloseBtn    = document.getElementById('settingsCloseBtn');
+const apiKeyInput         = document.getElementById('apiKeyInput');
+const groqKeyInput        = document.getElementById('groqKeyInput');
+const toggleGeminiKey     = document.getElementById('toggleGeminiKey');
+const toggleGroqKey       = document.getElementById('toggleGroqKey');
+const saveAllBtn          = document.getElementById('saveAllBtn');
+const toggleShortcutRecorder   = document.getElementById('toggleShortcutRecorder');
+const screenshotShortcutRecorder = document.getElementById('screenshotShortcutRecorder');
+const toggleShortcutDisplay    = document.getElementById('toggleShortcutDisplay');
+const screenshotShortcutDisplay = document.getElementById('screenshotShortcutDisplay');
+const resetToggleShortcut      = document.getElementById('resetToggleShortcut');
+const resetScreenshotShortcut  = document.getElementById('resetScreenshotShortcut');
 const screenshotPreview= document.getElementById('screenshotPreview');
-const ssThumb          = document.getElementById('ssThumb');
-const ssRemove         = document.getElementById('ssRemove');
+const ssThumbnails     = document.getElementById('ssThumbnails');
+const ssCount          = document.getElementById('ssCount');
+const ssRemoveAll      = document.getElementById('ssRemoveAll');
+const imgLimitBadge    = document.getElementById('imgLimitBadge');
 const inputWrapper     = document.querySelector('.input-wrapper');
 const welcomeTitle     = document.getElementById('welcomeTitle');
 const welcomeIcon      = document.getElementById('welcomeIcon');
@@ -46,7 +56,7 @@ let groqApiKey         = '';
 let conversationHistory= [];
 let isStreaming        = false;
 let abortController    = null;   // cancels in-flight stream
-let pendingScreenshot  = null;
+let pendingScreenshots = [];  // array of base64 data URLs
 let welcomeEl          = document.getElementById('welcomeEl');
 
 
@@ -57,6 +67,14 @@ async function init() {
   if (geminiApiKey) apiKeyInput.value = geminiApiKey;
   groqApiKey = config.groqApiKey || '';
   if (groqApiKey) groqKeyInput.value = groqApiKey;
+
+  // Load saved keybindings into the recorder displays
+  const savedToggle = config.shortcutToggle || 'Control+Alt+Space';
+  const savedScreenshot = config.shortcutScreenshot || 'CommandOrControl+Shift+S';
+  toggleShortcutDisplay.textContent = electronKeyToDisplay(savedToggle);
+  screenshotShortcutDisplay.textContent = electronKeyToDisplay(savedScreenshot);
+  toggleShortcutRecorder.dataset.value = savedToggle;
+  screenshotShortcutRecorder.dataset.value = savedScreenshot;
 
   await switchProvider('gemini');
   inputEl.focus();
@@ -112,32 +130,161 @@ async function switchProvider(p) {
   }
 }
 
-// ─── Settings panel ───────────────────────────────────────────────────────────
-settingsBtn.addEventListener('click', () => {
-  settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+// ─── Settings Modal ───────────────────────────────────────────────────────────
+
+// Open / close
+settingsBtn.addEventListener('click', () => { settingsModal.style.display = 'flex'; });
+settingsCloseBtn.addEventListener('click', closeSettings);
+function closeSettings() {
+  settingsModal.style.display = 'none';
+  stopRecording(); // cancel any active keybind recording
+}
+
+// Eye-toggle for API key fields
+function makeEyeToggle(btn, input) {
+  btn.addEventListener('click', () => {
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    btn.style.color = isHidden ? 'var(--accent)' : '';
+  });
+}
+makeEyeToggle(toggleGeminiKey, apiKeyInput);
+makeEyeToggle(toggleGroqKey, groqKeyInput);
+
+// External links
+document.getElementById('geminiLink').addEventListener('click', () =>
+  window.electronAPI.openExternal('https://aistudio.google.com/app/apikey'));
+document.getElementById('groqLink').addEventListener('click', () =>
+  window.electronAPI.openExternal('https://console.groq.com/keys'));
+
+// ─── Keybinding Recorder ─────────────────────────────────────────────────────
+const DEFAULTS = {
+  toggle:     { electron: 'Control+Alt+Space', display: '⌃⌥Space' },
+  screenshot: { electron: 'CommandOrControl+Shift+S', display: '⌘⇧S' },
+};
+
+let activeRecorder = null; // which recorder is listening
+
+function electronKeyToDisplay(electronKey) {
+  return electronKey
+    .replace('CommandOrControl', '⌘')
+    .replace('Command', '⌘')
+    .replace('Control', '⌃')
+    .replace('Alt', '⌥')
+    .replace('Shift', '⇧')
+    .replace(/\+/g, '');
+}
+
+function displayToElectronKey(display) {
+  return display
+    .replace('⌘', 'CommandOrControl+')
+    .replace('⌃', 'Control+')
+    .replace('⌥', 'Alt+')
+    .replace('⇧', 'Shift+');
+}
+
+function keyEventToElectron(e) {
+  const parts = [];
+  if (e.metaKey || e.ctrlKey) parts.push('CommandOrControl');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.altKey) parts.push('Alt');
+  const key = e.key.toUpperCase();
+  if (!['META','CONTROL','SHIFT','ALT'].includes(e.key.toUpperCase())) {
+    // Convert special keys
+    const specialMap = { ' ': 'Space', 'ARROWUP': 'Up', 'ARROWDOWN': 'Down', 'ARROWLEFT': 'Left', 'ARROWRIGHT': 'Right' };
+    parts.push(specialMap[e.key] || key);
+  }
+  return parts.join('+');
+}
+
+function startRecording(recorder, displayEl) {
+  if (activeRecorder) stopRecording();
+  activeRecorder = recorder;
+  recorder.classList.add('recording');
+  displayEl.textContent = '…press keys…';
+
+  const onKey = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const electronKey = keyEventToElectron(e);
+    if (!electronKey || electronKey === '' || ['CommandOrControl', 'Shift', 'Alt', 'Control'].includes(electronKey)) return;
+    recorder.dataset.value = electronKey;
+    displayEl.textContent = electronKeyToDisplay(electronKey);
+    stopRecording();
+  };
+
+  recorder._keyHandler = onKey;
+  window.addEventListener('keydown', onKey, { capture: true });
+}
+
+function stopRecording() {
+  if (!activeRecorder) return;
+  activeRecorder.classList.remove('recording');
+  if (activeRecorder._keyHandler) {
+    window.removeEventListener('keydown', activeRecorder._keyHandler, { capture: true });
+    delete activeRecorder._keyHandler;
+  }
+  activeRecorder = null;
+}
+
+toggleShortcutRecorder.addEventListener('click', () => {
+  if (toggleShortcutRecorder.classList.contains('recording')) { stopRecording(); return; }
+  startRecording(toggleShortcutRecorder, toggleShortcutDisplay);
+});
+screenshotShortcutRecorder.addEventListener('click', () => {
+  if (screenshotShortcutRecorder.classList.contains('recording')) { stopRecording(); return; }
+  startRecording(screenshotShortcutRecorder, screenshotShortcutDisplay);
 });
 
-saveKeyBtn.addEventListener('click', async () => {
-  const key = apiKeyInput.value.trim();
-  if (!key) return;
-  geminiApiKey = key;
-  const config = await window.electronAPI.getConfig();
-  await window.electronAPI.saveConfig({ ...config, geminiApiKey: key });
-  settingsPanel.style.display = 'none';
-  showInfo('✅ Gemini API key saved!');
-  if (currentProvider === 'gemini') await loadGeminiModels();
+resetToggleShortcut.addEventListener('click', () => {
+  stopRecording();
+  toggleShortcutRecorder.dataset.value = DEFAULTS.toggle.electron;
+  toggleShortcutDisplay.textContent = DEFAULTS.toggle.display;
+});
+resetScreenshotShortcut.addEventListener('click', () => {
+  stopRecording();
+  screenshotShortcutRecorder.dataset.value = DEFAULTS.screenshot.electron;
+  screenshotShortcutDisplay.textContent = DEFAULTS.screenshot.display;
 });
 
-saveGroqKeyBtn.addEventListener('click', async () => {
-  const key = groqKeyInput.value.trim();
-  if (!key) return;
-  groqApiKey = key;
+// ─── Save All Settings ────────────────────────────────────────────────────────
+saveAllBtn.addEventListener('click', async () => {
+  stopRecording();
+  const gKey = apiKeyInput.value.trim();
+  const rKey = groqKeyInput.value.trim();
+  const toggleKey     = toggleShortcutRecorder.dataset.value     || DEFAULTS.toggle.electron;
+  const screenshotKey = screenshotShortcutRecorder.dataset.value || DEFAULTS.screenshot.electron;
+
+  // Update in-memory keys
+  if (gKey) geminiApiKey = gKey;
+  if (rKey) groqApiKey   = rKey;
+
+  // Save all to config
   const config = await window.electronAPI.getConfig();
-  await window.electronAPI.saveConfig({ ...config, groqApiKey: key });
-  settingsPanel.style.display = 'none';
-  showInfo('✅ Groq API key saved!');
-  if (currentProvider === 'groq') await loadGroqModels();
+  await window.electronAPI.saveConfig({
+    ...config,
+    geminiApiKey: gKey || config.geminiApiKey,
+    groqApiKey:   rKey || config.groqApiKey,
+  });
+
+  // Update shortcuts in main process (saves + re-registers live)
+  await window.electronAPI.updateShortcuts({ toggleKey, screenshotKey });
+
+  // Refresh models if provider changed
+  if (gKey && currentProvider === 'gemini') await loadGeminiModels();
+  if (rKey && currentProvider === 'groq')   await loadGroqModels();
+
+  // Visual feedback
+  saveAllBtn.textContent = '✓ Saved!';
+  saveAllBtn.classList.add('saved');
+  setTimeout(() => {
+    saveAllBtn.textContent = 'Save Settings';
+    saveAllBtn.classList.remove('saved');
+    closeSettings();
+  }, 1200);
 });
+
+
 
 // ─── Known Ollama cloud models ────────────────────────────────────────────────
 const OLLAMA_CLOUD_MODELS = [
@@ -328,7 +475,86 @@ function updateModelLabel() {
   }
 }
 
-modelSelect.addEventListener('change', updateModelLabel);
+// ─── Model image limits ─────────────────────────────────────────
+function getModelImageLimit(provider, modelId) {
+  const id = (modelId || '').toLowerCase();
+  if (provider === 'gemini') {
+    const visionModels = ['gemini-2.5', 'gemini-2.0', 'gemini-1.5', 'gemini-pro-vision', 'gemini-flash', 'gemini-pro'];
+    return visionModels.some(m => id.includes(m)) ? 16 : 0;
+  }
+  if (provider === 'groq') {
+    const visionModels = ['llama-3.2', 'llama-4', 'llava', 'vision'];
+    return visionModels.some(m => id.includes(m)) ? 1 : 0;
+  }
+  if (provider === 'ollama') {
+    const visionKeywords = ['llava', 'vision', 'moondream', 'bakllava', 'minicpm', 'gemma3', 'qwen2-vl', 'qvq', 'cogvlm'];
+    return visionKeywords.some(k => id.includes(k)) ? 1 : 0;
+  }
+  return 0;
+}
+
+function updateImgLimitBadge() {
+  const limit = getModelImageLimit(currentProvider, modelSelect.value);
+  if (limit > 0) {
+    imgLimitBadge.textContent = `🖼 max ${limit} image${limit > 1 ? 's' : ''}`;
+    imgLimitBadge.style.display = 'inline';
+  } else {
+    imgLimitBadge.style.display = 'none';
+  }
+}
+
+modelSelect.addEventListener('change', () => {
+    updateModelLabel();
+    updateImgLimitBadge();
+});
+
+// ─── Multi-thumbnail rendering ────────────────────────────────────
+function renderScreenshotThumbnails() {
+  ssThumbnails.innerHTML = '';
+  pendingScreenshots.forEach((dataUrl, idx) => {
+    const item = document.createElement('div');
+    item.className = 'ss-thumb-item';
+    item.innerHTML = `
+      <img src="${dataUrl}" alt="image ${idx+1}" />
+      <button class="ss-thumb-remove" title="Remove" data-idx="${idx}">×</button>
+    `;
+    item.querySelector('.ss-thumb-remove').addEventListener('click', () => {
+      pendingScreenshots.splice(idx, 1);
+      if (pendingScreenshots.length === 0) {
+        screenshotPreview.style.display = 'none';
+        inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
+      } else {
+        renderScreenshotThumbnails();
+      }
+      inputEl.focus();
+    });
+    ssThumbnails.appendChild(item);
+  });
+  ssCount.textContent = pendingScreenshots.length;
+}
+
+ssRemoveAll.addEventListener('click', () => {
+  pendingScreenshots = [];
+  screenshotPreview.style.display = 'none';
+  ssThumbnails.innerHTML = '';
+  inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
+  inputEl.focus();
+});
+
+window.electronAPI.onScreenshot((dataUrl) => {
+  const limit = getModelImageLimit(currentProvider, modelSelect.value);
+  if (limit > 0 && pendingScreenshots.length >= limit) {
+    showError(`⚠️ ${modelSelect.value} supports max ${limit} image${limit > 1 ? 's' : ''}. Remove one first.`);
+    return;
+  }
+  pendingScreenshots.push(dataUrl);
+  renderScreenshotThumbnails();
+  screenshotPreview.style.display = 'block';
+  if (welcomeEl && welcomeEl.parentNode) { welcomeEl.remove(); welcomeEl = null; }
+  inputEl.placeholder = 'Ask about the image… or press Enter to auto-solve';
+  inputEl.focus();
+  scrollToBottom();
+});
 
 // ─── Auto-resize textarea ──────────────────────────────────────────────────────
 inputEl.addEventListener('input', () => {
@@ -354,24 +580,6 @@ hideBtn.addEventListener('click', () => window.electronAPI.hideWindow());
 quitBtn.addEventListener('click', () => window.electronAPI.quitApp());
 // clearBtn wired below alongside onNewChat
 
-ssRemove.addEventListener('click', () => {
-  pendingScreenshot = null;
-  screenshotPreview.style.display = 'none';
-  ssThumb.src = '';
-  inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
-  inputEl.focus();
-});
-
-// ─── Screenshot IPC ───────────────────────────────────────────────────────────
-window.electronAPI.onScreenshot((dataUrl) => {
-  pendingScreenshot = dataUrl;
-  ssThumb.src = dataUrl;
-  screenshotPreview.style.display = 'block';
-  if (welcomeEl && welcomeEl.parentNode) { welcomeEl.remove(); welcomeEl = null; }
-  inputEl.placeholder = 'Ask about the screenshot… or press Enter to auto-solve';
-  inputEl.focus();
-  scrollToBottom();
-});
 
 window.electronAPI.onScreenshotError((err) => {
   showError('Screenshot failed: ' + err + '\n(Grant Screen Recording in System Settings → Privacy)');
@@ -384,9 +592,9 @@ clearBtn.addEventListener('click', () => clearChat(true));
 // ─── Clear chat ───────────────────────────────────────────────────────────────
 function clearChat(showWelcome = true) {
   conversationHistory = [];
-  pendingScreenshot   = null;
+  pendingScreenshots  = [];
   screenshotPreview.style.display = 'none';
-  ssThumb.src = '';
+  ssThumbnails.innerHTML = '';
   inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
   messagesEl.innerHTML = '';
 
@@ -411,8 +619,8 @@ function clearChat(showWelcome = true) {
 // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
 async function sendMessage() {
   const text = inputEl.value.trim();
-  const hasScreenshot = !!pendingScreenshot;
-  if (!text && !hasScreenshot) return;
+  const hasImages = pendingScreenshots.length > 0;
+  if (!text && !hasImages) return;
 
   const model = modelSelect.value;
   if (!model) { showError('Please select a model first.'); return; }
@@ -431,18 +639,18 @@ async function sendMessage() {
 
   // Build history entry
   const userMsg = { role: 'user', content: userText };
-  if (hasScreenshot) userMsg.images = [pendingScreenshot.replace(/^data:image\/\w+;base64,/, '')];
+  if (hasImages) userMsg.images = pendingScreenshots.map(d => d.replace(/^data:image\/\w+;base64,/, ''));
   conversationHistory.push(userMsg);
 
-  appendUserMessage(userText, hasScreenshot ? pendingScreenshot : null);
+  appendUserMessage(userText, hasImages ? [...pendingScreenshots] : []);
 
   // Reset input
   inputEl.value = '';
   inputEl.style.height = 'auto';
   inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
-  pendingScreenshot = null;
+  pendingScreenshots = [];
   screenshotPreview.style.display = 'none';
-  ssThumb.src = '';
+  ssThumbnails.innerHTML = '';
 
   setStreaming(true);
   const typingEl = appendTyping();
@@ -661,11 +869,15 @@ function buildGeminiParts(msg) {
 }
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
-function appendUserMessage(text, screenshotDataUrl) {
+function appendUserMessage(text, images = []) {
   const msg = document.createElement('div');
   msg.className = `msg user${currentProvider === 'gemini' ? ' gemini-msg' : currentProvider === 'groq' ? ' groq-msg' : ''}`;
   let inner = `<div class="bubble">${escapeHtml(text)}`;
-  if (screenshotDataUrl) inner += `<img class="ss-chat-img" src="${screenshotDataUrl}" alt="screenshot" />`;
+  if (images && images.length > 0) {
+    inner += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">`;
+    images.forEach((url, i) => { inner += `<img class="ss-chat-img" src="${url}" alt="image ${i+1}" />`; });
+    inner += `</div>`;
+  }
   inner += `</div>`;
   msg.innerHTML = inner;
   messagesEl.appendChild(msg);

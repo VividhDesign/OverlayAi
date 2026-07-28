@@ -139,40 +139,223 @@ body {
 }
 .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
 
-/* ── Settings Panel ── */
-.settings-panel {
-  background: rgba(255,255,255,0.03);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
-  flex-shrink: 0;
-  animation: fadeSlideIn 0.2s ease-out;
+/* ── Settings Modal (full-panel) ── */
+.settings-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 10, 16, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  animation: fadeSlideIn 0.18s ease-out;
+  overflow: hidden;
 }
-.settings-row { display: flex; flex-direction: column; gap: 5px; }
-.settings-label { font-size: 11px; color: var(--text-dim); font-weight: 500; }
-.settings-input-row { display: flex; gap: 6px; }
+
+.settings-modal-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+
+.settings-close-btn {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  -webkit-app-region: no-drag;
+}
+
+/* ── Settings Section ── */
+.settings-section {
+  margin-bottom: 18px;
+}
+
+.settings-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 10px;
+}
+
+.settings-field {
+  margin-bottom: 12px;
+}
+
+.settings-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.settings-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .settings-input {
   flex: 1;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 8px;
   color: var(--text);
   font-family: var(--font);
   font-size: 12px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0;
 }
-.settings-input:focus { border-color: var(--gemini); }
-.settings-save-btn {
-  padding: 5px 12px;
-  background: var(--gemini);
-  border: none; border-radius: 7px;
-  color: #fff; font-family: var(--font); font-size: 12px; font-weight: 500;
+.settings-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.settings-eye-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
-.settings-save-btn:hover { opacity: 0.85; }
-.settings-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.settings-eye-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+.settings-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.settings-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.settings-link:hover { opacity: 0.8; }
+
+/* ── Keybinding Recorder ── */
+.keybind-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.keybind-recorder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-height: 32px;
+  -webkit-app-region: no-drag;
+}
+.keybind-recorder:hover {
+  border-color: rgba(255,255,255,0.15);
+}
+.keybind-recorder.recording {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+  animation: pulse-record 1s ease-in-out infinite;
+}
+@keyframes pulse-record {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-glow); }
+  50% { box-shadow: 0 0 0 4px rgba(124,106,247,0.15); }
+}
+
+.keybind-display {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+.keybind-recorder.recording .keybind-display {
+  color: var(--accent);
+}
+
+.keybind-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.keybind-recorder.recording .keybind-hint {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.keybind-reset {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+.keybind-reset:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ── Save Button ── */
+.settings-save-all-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--accent);
+  border: none;
+  border-radius: 9px;
+  color: #fff;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  margin-top: 4px;
+  letter-spacing: 0.2px;
+}
+.settings-save-all-btn:hover { opacity: 0.88; }
+.settings-save-all-btn:active { transform: scale(0.98); }
+.settings-save-all-btn.saved {
+  background: var(--green);
+}
+
+.settings-privacy-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 8px;
+}
+
 
 /* ── Messages ── */
 .messages {
@@ -272,11 +455,16 @@ kbd {
 }
 .ss-header { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; border-bottom: 1px solid rgba(124,106,247,0.2); }
 .ss-label  { font-size: 11px; color: var(--accent); font-weight: 500; }
-.ss-remove { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; padding: 1px 4px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
-.ss-remove:hover { color: var(--red); background: rgba(248,113,113,0.1); }
-.ss-thumb  { width: 100%; max-height: 130px; object-fit: cover; object-position: top; display: block; }
-.ss-hint   { font-size: 10px; color: var(--text-muted); padding: 4px 10px 5px; text-align: center; }
-.ss-chat-img { width: 100%; max-height: 160px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 6px; display: block; border: 1px solid rgba(255,255,255,0.1); }
+.ss-remove-all { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+.ss-remove-all:hover { color: var(--red); background: rgba(248,113,113,0.1); }
+.ss-thumbnails { display: flex; gap: 6px; padding: 6px 10px; flex-wrap: wrap; }
+.ss-thumb-item { position: relative; flex-shrink: 0; width: 72px; height: 54px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+.ss-thumb-item img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.ss-thumb-remove { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: rgba(0,0,0,0.7); border: none; border-radius: 50%; color: #fff; cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; line-height: 1; }
+.ss-thumb-item:hover .ss-thumb-remove { opacity: 1; }
+.ss-hint   { font-size: 10px; color: var(--text-muted); padding: 0 10px 5px; text-align: center; }
+.ss-chat-img { width: 72px; height: 54px; object-fit: cover; object-position: top; border-radius: 6px; margin-top: 6px; display: inline-block; border: 1px solid rgba(255,255,255,0.1); margin-right: 4px; }
+.img-limit-badge { font-size: 9px; color: var(--accent); background: rgba(124,106,247,0.12); border: 1px solid rgba(124,106,247,0.25); border-radius: 4px; padding: 1px 5px; font-weight: 500; white-space: nowrap; }
 
 /* ── Input area ── */
 .input-area { padding: 8px 10px 10px; border-top: 1px solid var(--border); flex-shrink: 0; }

@@ -63,10 +63,10 @@ function updateTrayMenu() {
   tray.setToolTip(visible ? 'AiOverlay — Visible' : 'AiOverlay — Hidden');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: visible ? '● Overlay is ON' : '○ Overlay is OFF', enabled: false },
-    { label: '⌘⇧Space to toggle anywhere', enabled: false },
+    { label: '⌃⌥Space to toggle anywhere', enabled: false },
     { type: 'separator' },
     {
-      label: visible ? 'Hide Overlay' : 'Show Overlay  ⌘⇧Space',
+      label: visible ? 'Hide Overlay' : 'Show Overlay  ⌃⌥Space',
       click: () => toggleWindow(),
     },
     { label: 'Screenshot  ⌘⇧S', enabled: false },
@@ -183,40 +183,39 @@ app.whenReady().then(() => {
   // Check screen recording permission after window is ready
   mainWindow.webContents.once('did-finish-load', () => checkScreenPermission());
 
-  // ─── TOGGLE: Cmd+Shift+Space ───
-  const ret = globalShortcut.register('CommandOrControl+Shift+Space', () => {
-    toggleWindow();
-  });
-  if (!ret) {
-    globalShortcut.register('CommandOrControl+Shift+G', () => toggleWindow());
-  }
+  // ─── Register shortcuts from config (or defaults) ───
+  registerShortcuts();
+});
 
-  // ─── NEW CHAT: Cmd+N ───
+// ─── Shortcut registration (reads from config each time) ─────────────────────
+function registerShortcuts() {
+  const config = readConfig();
+  const toggleKey  = config.shortcutToggle     || 'Control+Alt+Space';
+  const screenshotKey = config.shortcutScreenshot || 'CommandOrControl+Shift+S';
+
+  // Unregister all old shortcuts before re-registering
+  globalShortcut.unregisterAll();
+
+  // ─── TOGGLE ───
+  const ret = globalShortcut.register(toggleKey, toggleWindow);
+  if (!ret) globalShortcut.register('CommandOrControl+Shift+G', toggleWindow);
+
+  // ─── NEW CHAT: Cmd+N (always fixed) ───
   globalShortcut.register('CommandOrControl+N', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (!mainWindow.isVisible()) { mainWindow.show(); mainWindow.focus(); }
     mainWindow.webContents.send('new-chat');
   });
-  // ─── SCREENSHOT: Cmd+Shift+S ───
-  globalShortcut.register('CommandOrControl+Shift+S', async () => {
+
+  // ─── SCREENSHOT ───
+  globalShortcut.register(screenshotKey, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const wasVisible = mainWindow.isVisible();
-
-    // 1. Hide the overlay so it won't appear in the screenshot
     if (wasVisible) mainWindow.hide();
-
-    // 2. Capture the screen
     await new Promise((r) => setTimeout(r, 250));
-
     try {
       const { width, height } = screen.getPrimaryDisplay().size;
-      const sources = await desktopCapturer.getSources({
-        types: ['screen'],
-        thumbnailSize: { width, height },
-      });
-
-
-
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height } });
       if (sources.length > 0) {
         const dataUrl = sources[0].thumbnail.toDataURL();
         if (wasVisible) { mainWindow.show(); mainWindow.focus(); }
@@ -226,15 +225,13 @@ app.whenReady().then(() => {
         mainWindow.webContents.send('screenshot-error', 'No screen source found');
       }
     } catch (err) {
-      // Re-enable protection even on failure
       if (wasVisible) { mainWindow.show(); mainWindow.focus(); }
-      // err.message may be undefined on macOS permission denial — provide a clear fallback
       const errMsg = (err && (err.message || err.toString())) ||
-        'Screen Recording permission denied. Open System Settings → Privacy & Security → Screen Recording and enable AiOverlay, then relaunch.';
+        'Screen Recording permission denied. Open System Settings → Privacy & Security → Screen Recording and enable OverlayAi, then relaunch.';
       mainWindow.webContents.send('screenshot-error', errMsg);
     }
   });
-});
+}
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => e.preventDefault());
@@ -245,6 +242,17 @@ app.on('activate', () => { if (!mainWindow || mainWindow.isDestroyed()) createWi
 ipcMain.on('hide-window', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide(); });
 ipcMain.on('quit-app', () => { globalShortcut.unregisterAll(); app.exit(0); });
 ipcMain.on('resize-window', (_, { width, height }) => { if (mainWindow) mainWindow.setSize(width, height, true); });
+ipcMain.on('open-external', (_, url) => { require('electron').shell.openExternal(url); });
 
 ipcMain.handle('get-config', () => readConfig());
 ipcMain.handle('save-config', (_, data) => { writeConfig(data); return true; });
+
+// Re-register shortcuts with new keybindings and save to config
+ipcMain.handle('update-shortcuts', (_, { toggleKey, screenshotKey }) => {
+  const config = readConfig();
+  config.shortcutToggle = toggleKey;
+  config.shortcutScreenshot = screenshotKey;
+  writeConfig(config);
+  registerShortcuts(); // apply immediately
+  return true;
+});

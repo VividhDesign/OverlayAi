@@ -3,11 +3,49 @@
   "productName": "OverlayAi",
   "version": "1.0.0",
   "description": "A floating AI assistant overlay supporting Ollama, Google Gemini, and Groq — toggle with Cmd+Shift+Space",
+  "author": "VividhDesign",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder --mac",
+    "build:dmg": "electron-builder --mac dmg",
+    "build:dir": "electron-builder --mac dir"
+  },
+  "build": {
+    "appId": "com.vividhdesign.overlayai",
+    "productName": "OverlayAi",
+    "copyright": "Copyright © 2025 VividhDesign",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "icon": "assets/icon.icns",
+      "darkModeSupport": true,
+      "minimumSystemVersion": "10.15.0"
+    },
+    "dmg": {
+      "title": "OverlayAi",
+      "window": { "width": 540, "height": 380 },
+      "contents": [
+        { "x": 140, "y": 190, "type": "file" },
+        { "x": 400, "y": 190, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "style.css",
+      "package.json",
+      "assets/**/*"
+    ],
+    "asar": true
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
   }
 }

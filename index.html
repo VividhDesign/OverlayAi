@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Overlay</title>
+  <title>OverlayAi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -35,13 +35,12 @@
     </div>
 
     <div class="titlebar-right">
-      <button class="icon-btn" id="settingsBtn" title="API Key settings">
+      <button class="icon-btn" id="settingsBtn" title="Settings">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 12 2v2a8 8 0 0 1 5.66 2.34M4.93 4.93A10 10 0 0 0 2 12h2a8 8 0 0 1 2.34-5.66M19.07 19.07A10 10 0 0 1 12 22v-2a8 8 0 0 0 5.66-2.34M4.93 19.07A10 10 0 0 0 12 22v-2a8 8 0 0 1-5.66-2.34"/>
         </svg>
       </button>
       <button class="icon-btn" id="clearBtn" title="New Chat (⌘N)">
-        <!-- compose / new-chat icon -->
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
           <path d="M18.37 2.63a2 2 0 0 1 2.83 2.83L12 14.5l-4 1 1-4z"/>
@@ -55,23 +54,79 @@
     </div>
   </div>
 
-  <!-- ── Settings panel (slide-down) ── -->
-  <div class="settings-panel" id="settingsPanel" style="display:none;">
-    <div class="settings-row">
-      <label class="settings-label">Gemini API Key</label>
-      <div class="settings-input-row">
-        <input type="password" id="apiKeyInput" class="settings-input" placeholder="Paste your Gemini API key…" autocomplete="off" />
-        <button class="settings-save-btn" id="saveKeyBtn">Save</button>
+  <!-- ── Settings Modal (full-panel overlay) ── -->
+  <div class="settings-modal" id="settingsModal" style="display:none;">
+    <div class="settings-modal-inner">
+
+      <div class="settings-modal-header">
+        <span class="settings-modal-title">⚙ Settings</span>
+        <button class="icon-btn settings-close-btn" id="settingsCloseBtn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+          </svg>
+        </button>
       </div>
-    </div>
-    <div class="settings-row">
-      <label class="settings-label">Groq API Key</label>
-      <div class="settings-input-row">
-        <input type="password" id="groqKeyInput" class="settings-input" placeholder="Paste your Groq API key…" autocomplete="off" />
-        <button class="settings-save-btn" id="saveGroqKeyBtn">Save</button>
+
+      <!-- API Keys Section -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔑 API Keys</div>
+
+        <div class="settings-field">
+          <label class="settings-label">Gemini API Key</label>
+          <div class="settings-input-row">
+            <input type="password" id="apiKeyInput" class="settings-input" placeholder="AIza…" autocomplete="off" />
+            <button class="settings-eye-btn" id="toggleGeminiKey" title="Show/hide">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="settings-hint">Get free key at <span class="settings-link" id="geminiLink">aistudio.google.com</span></div>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">Groq API Key</label>
+          <div class="settings-input-row">
+            <input type="password" id="groqKeyInput" class="settings-input" placeholder="gsk_…" autocomplete="off" />
+            <button class="settings-eye-btn" id="toggleGroqKey" title="Show/hide">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="settings-hint">Get free key at <span class="settings-link" id="groqLink">console.groq.com</span></div>
+        </div>
       </div>
+
+      <!-- Key Bindings Section -->
+      <div class="settings-section">
+        <div class="settings-section-title">⌨ Key Bindings</div>
+
+        <div class="settings-field">
+          <label class="settings-label">Toggle Overlay</label>
+          <div class="keybind-row">
+            <div class="keybind-recorder" id="toggleShortcutRecorder" data-action="toggle" title="Click to record new shortcut">
+              <span class="keybind-display" id="toggleShortcutDisplay">⌘⇧Space</span>
+              <span class="keybind-hint">click to change</span>
+            </div>
+            <button class="keybind-reset" id="resetToggleShortcut" title="Reset to default">↺</button>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">Screenshot</label>
+          <div class="keybind-row">
+            <div class="keybind-recorder" id="screenshotShortcutRecorder" data-action="screenshot" title="Click to record new shortcut">
+              <span class="keybind-display" id="screenshotShortcutDisplay">⌘⇧S</span>
+              <span class="keybind-hint">click to change</span>
+            </div>
+            <button class="keybind-reset" id="resetScreenshotShortcut" title="Reset to default">↺</button>
+          </div>
+        </div>
+
+        <div class="settings-hint" style="margin-top:6px;">Shortcuts are global — work even when overlay is hidden</div>
+      </div>
+
+      <!-- Save Button -->
+      <button class="settings-save-all-btn" id="saveAllBtn">Save Settings</button>
+      <div class="settings-privacy-note">Keys stored locally — never sent anywhere except their respective APIs</div>
     </div>
-    <div class="settings-hint">Keys stored locally in config.json — never sent anywhere except their respective APIs</div>
   </div>
 
   <!-- ── Messages ── -->
@@ -81,18 +136,18 @@
       <div class="welcome-title" id="welcomeTitle">Ollama AI Assistant</div>
       <div class="welcome-sub">Running 100% locally · Powered by Ollama</div>
       <div class="shortcut-hint">
-        <kbd>⌘⇧Space</kbd> hide &nbsp;·&nbsp; <kbd>⌘⇧S</kbd> screenshot
+        <kbd>⌃⌥Space</kbd> hide &nbsp;·&nbsp; <kbd>⌘⇧S</kbd> screenshot
       </div>
     </div>
   </div>
 
-  <!-- ── Screenshot preview ── -->
+  <!-- ── Screenshot preview (multi-image) ── -->
   <div class="screenshot-preview" id="screenshotPreview" style="display:none;">
     <div class="ss-header">
-      <span class="ss-label">📸 Screenshot attached</span>
-      <button class="ss-remove" id="ssRemove" title="Remove">✕</button>
+      <span class="ss-label">📸 <span id="ssCount">1</span> image attached</span>
+      <button class="ss-remove-all" id="ssRemoveAll" title="Remove all">✕ all</button>
     </div>
-    <img class="ss-thumb" id="ssThumb" src="" alt="screenshot preview" />
+    <div class="ss-thumbnails" id="ssThumbnails"></div>
     <div class="ss-hint">Press Enter to analyze, or type a question first</div>
   </div>
 
@@ -114,10 +169,12 @@
     </div>
     <div class="input-footer">
       <span id="modelLabel">No model selected</span>
-      <span class="ss-shortcut-hint"><kbd>⌘⇧S</kbd> screenshot</span>
+      <span class="img-limit-badge" id="imgLimitBadge" style="display:none;"></span>
+      <span class="ss-shortcut-hint"><kbd>⌃⌥Space</kbd> hide &nbsp;·&nbsp; <kbd>⌘⇧S</kbd> screenshot</span>
       <span class="quit-link" id="quitBtn">Quit</span>
     </div>
   </div>
+
 
   <script src="renderer.js"></script>
 </body>
