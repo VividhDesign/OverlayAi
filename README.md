@@ -4,7 +4,22 @@ A lightweight, always-on-top AI assistant overlay for macOS — built with Elect
 
 Toggle it instantly from anywhere with **⌃⌥Space** (`Ctrl+Option+Space`).
 
+[![Download DMG](https://img.shields.io/badge/Download-macOS%20.DMG-blue?style=for-the-badge&logo=apple)](https://github.com/VividhDesign/OverlayAi/releases/latest)
+[![Download ZIP](https://img.shields.io/badge/Download-macOS%20.ZIP-lightgrey?style=for-the-badge&logo=apple)](https://github.com/VividhDesign/OverlayAi/releases/latest)
+
 ![OverlayAi Demo](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple) ![Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron) ![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## 📥 Download & Installation for macOS
+
+### Option 1: Direct Download (Recommended)
+1. Go to [**OverlayAi GitHub Releases**](https://github.com/VividhDesign/OverlayAi/releases/latest).
+2. Download **`OverlayAi-1.0.0-arm64.dmg`** (for Apple Silicon M1/M2/M3/M4) or **`OverlayAi-1.0.0-mac.zip`** (Intel Macs).
+3. Open the `.dmg` file and drag **OverlayAi** into your **Applications** folder.
+4. Open **OverlayAi** from Launchpad / Applications.
+
+> **Note for macOS Gatekeeper**: On first open, if macOS shows *"App cannot be opened because it is from an unidentified developer"*, simply right-click (or Control+click) `OverlayAi.app` in Applications and click **Open** -> **Open**.
 
 ---
 
