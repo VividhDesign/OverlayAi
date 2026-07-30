@@ -58,6 +58,14 @@ let isStreaming        = false;
 let abortController    = null;   // cancels in-flight stream
 let pendingScreenshots = [];  // array of base64 data URLs
 let welcomeEl          = document.getElementById('welcomeEl');
+let screenPermissionNotice = null;
+
+const DEFAULT_SCREEN_PROMPT = [
+  'Analyze this screen and help me with what is shown.',
+  'Identify the task, issue, or important information, explain what it means, and recommend the most useful next steps.',
+  'If it is a coding problem, provide a correct solution using the language and template shown.',
+  'If important details are unreadable, tell me exactly what additional information is needed.',
+].join(' ');
 
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -114,16 +122,32 @@ async function switchProvider(p) {
   } else if (p === 'groq') {
     setStatus('groq-active');
     if (!groqApiKey) {
-      window.electronAPI.openSettings();
-      showInfo('Enter your Groq API key in the Settings window ⚙');
+      // Re-check disk before prompting — key may be saved but not yet in memory
+      const cfg = await window.electronAPI.getConfig();
+      if (cfg.groqApiKey) {
+        groqApiKey = cfg.groqApiKey;
+        groqKeyInput.value = cfg.groqApiKey;
+        await loadGroqModels();
+      } else {
+        window.electronAPI.openSettings();
+        showInfo('Enter your Groq API key in the Settings window ⚙');
+      }
     } else {
       await loadGroqModels();
     }
   } else {
     setStatus('gemini-active');
     if (!geminiApiKey) {
-      window.electronAPI.openSettings();
-      showInfo('Enter your Gemini API key in the Settings window ⚙');
+      // Re-check disk before prompting — key may be saved but not yet in memory
+      const cfg = await window.electronAPI.getConfig();
+      if (cfg.geminiApiKey) {
+        geminiApiKey = cfg.geminiApiKey;
+        apiKeyInput.value = cfg.geminiApiKey;
+        await loadGeminiModels();
+      } else {
+        window.electronAPI.openSettings();
+        showInfo('Enter your Gemini API key in the Settings window ⚙');
+      }
     } else {
       await loadGeminiModels();
     }
@@ -132,8 +156,23 @@ async function switchProvider(p) {
 
 // ─── Settings Window ──────────────────────────────────────────────────────────
 
-// Open dedicated native settings window (normal macOS window, not overlay)
-settingsBtn.addEventListener('click', () => window.electronAPI.openSettings());
+// Open the Launcher (settings) window — also always re-populate inline modal fields
+// so that saved API keys are visible whenever the user opens settings.
+async function openSettingsAndPopulate() {
+  // Always re-read config fresh so fields show current saved values
+  const freshConfig = await window.electronAPI.getConfig();
+  if (freshConfig.geminiApiKey) {
+    geminiApiKey = freshConfig.geminiApiKey;
+    apiKeyInput.value = freshConfig.geminiApiKey;
+  }
+  if (freshConfig.groqApiKey) {
+    groqApiKey = freshConfig.groqApiKey;
+    groqKeyInput.value = freshConfig.groqApiKey;
+  }
+  window.electronAPI.openSettings();
+}
+
+settingsBtn.addEventListener('click', openSettingsAndPopulate);
 settingsCloseBtn.addEventListener('click', closeSettings);
 function closeSettings() {
   settingsModal.style.display = 'none';
@@ -542,6 +581,10 @@ ssRemoveAll.addEventListener('click', () => {
 });
 
 window.electronAPI.onScreenshot((dataUrl) => {
+  if (screenPermissionNotice?.isConnected) {
+    screenPermissionNotice.remove();
+    screenPermissionNotice = null;
+  }
   const limit = getModelImageLimit(currentProvider, modelSelect.value);
   if (limit > 0 && pendingScreenshots.length >= limit) {
     showError(`⚠️ ${modelSelect.value} supports max ${limit} image${limit > 1 ? 's' : ''}. Remove one first.`);
@@ -582,8 +625,40 @@ quitBtn.addEventListener('click', () => window.electronAPI.quitApp());
 
 
 window.electronAPI.onScreenshotError((err) => {
-  showError('Screenshot failed: ' + err + '\n(Grant Screen Recording in System Settings → Privacy)');
+  const isPermissionErr = err && (err.includes('denied') || err.includes('permission') || err.includes('Permission'));
+  if (isPermissionErr) {
+    const detail = screenPermissionNotice?.isConnected
+      ? screenPermissionNotice.querySelector('[data-permission-detail]')
+      : null;
+    if (detail) {
+      detail.textContent = err;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return;
+    }
+
+    // Keep a single actionable notice visible while permission is unavailable.
+    const errDiv = document.createElement('div');
+    errDiv.className = 'msg assistant';
+    errDiv.innerHTML = `
+      <div class="bubble error-bubble" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);padding:12px 14px;border-radius:10px;">
+        <div style="color:#f87171;font-weight:600;margin-bottom:6px;">📵 Screen Recording Permission Required</div>
+        <div data-permission-detail style="color:#fca5a5;font-size:12px;margin-bottom:10px;"></div>
+        <button type="button" data-open-privacy style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;">
+          Open System Settings → Screen Recording
+        </button>
+      </div>`;
+    errDiv.querySelector('[data-permission-detail]').textContent = err;
+    errDiv.querySelector('[data-open-privacy]').addEventListener('click', () => {
+      window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    });
+    screenPermissionNotice = errDiv;
+    messagesEl.appendChild(errDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  } else {
+    showError('Screenshot failed: ' + err);
+  }
 });
+
 
 // New Chat via ⌘N shortcut or button
 window.electronAPI.onNewChat(() => clearChat(true));
@@ -593,6 +668,7 @@ clearBtn.addEventListener('click', () => clearChat(true));
 function clearChat(showWelcome = true) {
   conversationHistory = [];
   pendingScreenshots  = [];
+  screenPermissionNotice = null;
   screenshotPreview.style.display = 'none';
   ssThumbnails.innerHTML = '';
   inputEl.placeholder = 'Ask anything… (Enter to send, Shift+Enter for newline)';
@@ -633,7 +709,7 @@ async function sendMessage() {
     showError('⚠️ Enter your Groq API key first.'); return;
   }
 
-  const userText = text || 'if its coding problem then detect the programming language from the template shown in the screenshot and write the solution in that same language, dont use comments and use short variable names apart from those written in template, if its not coding problem give direct answer';
+  const userText = text || DEFAULT_SCREEN_PROMPT;
 
   if (welcomeEl && welcomeEl.parentNode) { welcomeEl.remove(); welcomeEl = null; }
 

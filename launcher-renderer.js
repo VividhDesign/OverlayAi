@@ -65,13 +65,19 @@ document.querySelectorAll('.save-key-btn').forEach(btn => {
     if (!map) return;
     const val = document.getElementById(map.inputId).value.trim();
     if (!val) { showToast('Key cannot be empty', 'error'); return; }
-    const config = await window.launcherAPI.getConfig();
-    config[map.configKey] = val;
-    await window.launcherAPI.saveConfig(config);
-    updateProviderStatus(provider, true);
-    showToast(`✅ ${providerLabel(provider)} key saved!`, 'success');
+    try {
+      const config = await window.launcherAPI.getConfig();
+      config[map.configKey] = val;
+      await window.launcherAPI.saveConfig(config);
+      updateProviderStatus(provider, true);
+      showToast(`✅ ${providerLabel(provider)} key saved!`, 'success');
+    } catch (err) {
+      console.error('Save failed:', err);
+      showToast(`❌ Save failed: ${err.message || 'unknown error'}`, 'error');
+    }
   });
 });
+
 
 function providerLabel(p) {
   return { gemini: 'Gemini', groq: 'Groq', openai: 'OpenAI', claude: 'Claude' }[p] || p;

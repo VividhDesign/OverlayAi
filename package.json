@@ -1,7 +1,7 @@
 {
   "name": "overlay-ai",
   "productName": "OverlayAi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A floating AI assistant overlay supporting Ollama, Google Gemini, and Groq — toggle with Ctrl+Option+Space",
   "author": "VividhDesign",
   "main": "main.js",

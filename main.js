@@ -20,16 +20,55 @@ const {
 } = require('electron');
 const path = require('path');
 const fs   = require('fs');
+const os   = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+
+// ─── Disable macOS 14 ScreenCaptureKit per-session picker ────────────────────
+// Without this, desktopCapturer.getSources() shows a screen picker dialog
+// EVERY TIME it is called, even after permission is granted — by macOS design.
+// Disabling these flags reverts to classic TCC one-time permission behaviour.
+app.commandLine.appendSwitch('disable-features', 'ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma');
+
 
 let launcherWindow = null;   // Home / provider-config window
 let overlayWindow  = null;   // Floating frameless overlay
 let tray           = null;
 let toggleLock     = false;
+let screenshotCaptureInFlight = false;
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const CONFIG_PATH = path.join(__dirname, 'config.json');
-function readConfig()    { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; } }
-function writeConfig(d)  { fs.writeFileSync(CONFIG_PATH, JSON.stringify(d, null, 2)); }
+// Use app.getPath('userData') so config is writable in BOTH dev and packaged app.
+// __dirname inside app.asar is read-only — writing there silently fails.
+let CONFIG_PATH = null;
+function getConfigPath() {
+  if (!CONFIG_PATH) {
+    CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+    // One-time migration: copy keys from old location if userData config doesn't exist yet
+    const legacyPaths = [
+      path.join(__dirname, 'config.json'),
+      '/Users/vividhyadav/Projects/OverlayAi/config.json',
+    ];
+    if (!fs.existsSync(CONFIG_PATH)) {
+      for (const lp of legacyPaths) {
+        try {
+          if (fs.existsSync(lp)) {
+            fs.copyFileSync(lp, CONFIG_PATH);
+            console.log('[OverlayAi] Migrated config from', lp);
+            break;
+          }
+        } catch {}
+      }
+    }
+  }
+  return CONFIG_PATH;
+}
+function readConfig()  { try { return JSON.parse(fs.readFileSync(getConfigPath(), 'utf8')); } catch { return {}; } }
+function writeConfig(d) {
+  try { fs.writeFileSync(getConfigPath(), JSON.stringify(d, null, 2)); }
+  catch (e) { console.error('[OverlayAi] writeConfig FAILED:', e); throw e; }
+}
 
 // ─── Tray Icon ────────────────────────────────────────────────────────────────
 function createTrayIcon() {
@@ -163,6 +202,81 @@ function toggleOverlay() {
   }
 }
 
+// ─── Screenshot capture ──────────────────────────────────────────────────────
+// desktopCapturer triggers macOS's native Screen Recording dialog if it is called
+// without an approved TCC grant. Check the grant first so a denied permission
+// results in one actionable in-app message instead of a system dialog per hotkey.
+function getScreenRecordingPermission() {
+  if (process.platform !== 'darwin') return 'granted';
+  return systemPreferences.getMediaAccessStatus('screen');
+}
+
+function screenRecordingPermissionMessage(status) {
+  const action = 'Enable OverlayAi in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen OverlayAi.';
+  if (status === 'denied' || status === 'restricted') {
+    return `Screen Recording permission is ${status}. ${action}`;
+  }
+  return `Screen Recording permission has not been granted yet. ${action}`;
+}
+
+function sendScreenshotError(targetWindow, message) {
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('screenshot-error', message);
+  }
+}
+
+async function captureScreenDataUrl() {
+  // Electron's desktopCapturer requests Screen & System Audio on recent macOS
+  // releases, which can show a native prompt on each use. screencapture needs
+  // only the already-approved Screen Recording grant and never requests audio.
+  if (process.platform === 'darwin') {
+    const tempPath = path.join(os.tmpdir(), `overlayai-${process.pid}-${Date.now()}.png`);
+    try {
+      await execFileAsync('/usr/sbin/screencapture', ['-x', '-t', 'png', tempPath]);
+      const image = await fs.promises.readFile(tempPath);
+      return `data:image/png;base64,${image.toString('base64')}`;
+    } finally {
+      await fs.promises.unlink(tempPath).catch(() => {});
+    }
+  }
+
+  const { width, height } = screen.getPrimaryDisplay().size;
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width, height },
+  });
+  if (!sources.length) throw new Error('No screen source found.');
+  return sources[0].thumbnail.toDataURL();
+}
+
+async function capturePrimaryScreen() {
+  const targetWindow = overlayWindow;
+  if (!targetWindow || targetWindow.isDestroyed() || screenshotCaptureInFlight) return;
+
+  const permission = getScreenRecordingPermission();
+  if (permission !== 'granted') {
+    sendScreenshotError(targetWindow, screenRecordingPermissionMessage(permission));
+    return;
+  }
+
+  screenshotCaptureInFlight = true;
+  const wasVisible = targetWindow.isVisible();
+  try {
+    if (wasVisible) targetWindow.hide();
+    await new Promise(resolve => setTimeout(resolve, 250));
+
+    if (!targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('screenshot-captured', await captureScreenDataUrl());
+    }
+  } catch (err) {
+    const message = (err && (err.message || err.toString())) || 'Screen capture failed.';
+    sendScreenshotError(targetWindow, message);
+  } finally {
+    if (wasVisible && !targetWindow.isDestroyed()) targetWindow.showInactive();
+    screenshotCaptureInFlight = false;
+  }
+}
+
 // ─── Shortcuts ────────────────────────────────────────────────────────────────
 function registerShortcuts() {
   const config        = readConfig();
@@ -183,29 +297,7 @@ function registerShortcuts() {
   });
 
   // Screenshot
-  globalShortcut.register(screenshotKey, async () => {
-    if (!overlayWindow || overlayWindow.isDestroyed()) return;
-    const wasVisible = overlayWindow.isVisible();
-    if (wasVisible) overlayWindow.hide();
-    await new Promise(r => setTimeout(r, 250));
-    try {
-      const { width, height } = screen.getPrimaryDisplay().size;
-      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height } });
-      if (sources.length > 0) {
-        const dataUrl = sources[0].thumbnail.toDataURL();
-        if (wasVisible) overlayWindow.showInactive();
-        overlayWindow.webContents.send('screenshot-captured', dataUrl);
-      } else {
-        if (wasVisible) overlayWindow.showInactive();
-        overlayWindow.webContents.send('screenshot-error', 'No screen source found');
-      }
-    } catch (err) {
-      if (wasVisible) overlayWindow.showInactive();
-      const msg = (err && (err.message || err.toString())) ||
-        'Screen Recording permission denied. Open System Settings → Privacy & Security → Screen Recording.';
-      if (overlayWindow) overlayWindow.webContents.send('screenshot-error', msg);
-    }
-  });
+  globalShortcut.register(screenshotKey, capturePrimaryScreen);
 }
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
@@ -235,22 +327,7 @@ ipcMain.on('resize-window', (_, { width, height }) => {
 ipcMain.on('open-external', (_, url) => shell.openExternal(url));
 
 // Screenshot from overlay renderer
-ipcMain.on('capture-screenshot', async () => {
-  if (!overlayWindow) return;
-  const wasVisible = overlayWindow.isVisible();
-  if (wasVisible) overlayWindow.hide();
-  await new Promise(r => setTimeout(r, 250));
-  try {
-    const { width, height } = screen.getPrimaryDisplay().size;
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height } });
-    if (wasVisible) overlayWindow.showInactive();
-    if (sources.length) overlayWindow.webContents.send('screenshot-captured', sources[0].thumbnail.toDataURL());
-    else overlayWindow.webContents.send('screenshot-error', 'No source');
-  } catch (err) {
-    if (wasVisible) overlayWindow.showInactive();
-    overlayWindow.webContents.send('screenshot-error', err.message || 'Screen capture failed');
-  }
-});
+ipcMain.on('capture-screenshot', capturePrimaryScreen);
 
 // ─── IPC — Launcher ───────────────────────────────────────────────────────────
 ipcMain.on('launch-overlay', () => {
@@ -271,15 +348,31 @@ ipcMain.on('show-launcher', () => {
 });
 
 // ─── IPC — Config ─────────────────────────────────────────────────────────────
-ipcMain.handle('get-config', () => readConfig());
-ipcMain.handle('save-config', (_, data) => { writeConfig(data); return true; });
+ipcMain.handle('get-config', () => {
+  try { return readConfig(); }
+  catch (e) { console.error('[OverlayAi] get-config error:', e); return {}; }
+});
+ipcMain.handle('save-config', (_, data) => {
+  try {
+    writeConfig(data);
+    console.log('[OverlayAi] Config saved to:', getConfigPath());
+    return { ok: true };
+  } catch (e) {
+    console.error('[OverlayAi] save-config FAILED:', e);
+    throw new Error('Save failed: ' + e.message);
+  }
+});
 ipcMain.handle('update-shortcuts', (_, { toggleKey, screenshotKey }) => {
-  const config = readConfig();
-  config.shortcutToggle     = toggleKey;
-  config.shortcutScreenshot = screenshotKey;
-  writeConfig(config);
-  registerShortcuts();
-  return true;
+  try {
+    const config = readConfig();
+    config.shortcutToggle     = toggleKey;
+    config.shortcutScreenshot = screenshotKey;
+    writeConfig(config);
+    registerShortcuts();
+    return true;
+  } catch (e) {
+    throw new Error('Shortcut save failed: ' + e.message);
+  }
 });
 
 // Kept for backward compat (settings window from overlay gear icon)
