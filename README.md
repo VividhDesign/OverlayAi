@@ -2,7 +2,7 @@
 
 A lightweight, always-on-top AI assistant overlay for macOS — built with Electron. Supports **Ollama** (local models), **Google Gemini**, and **Groq** with real-time streaming responses and screenshot analysis.
 
-Toggle it instantly from anywhere with **⌃⌥Space** (`Ctrl+Option+Space`).
+Toggle it instantly from anywhere with **⌘⇧Space** (`Cmd+Shift+Space`).
 
 [![Download DMG](https://img.shields.io/badge/Download-macOS%20.DMG-blue?style=for-the-badge&logo=apple)](https://github.com/VividhDesign/OverlayAi/releases/latest)
 [![Download ZIP](https://img.shields.io/badge/Download-macOS%20.ZIP-lightgrey?style=for-the-badge&logo=apple)](https://github.com/VividhDesign/OverlayAi/releases/latest)
@@ -25,7 +25,7 @@ Toggle it instantly from anywhere with **⌃⌥Space** (`Ctrl+Option+Space`).
 
 ## Features
 
-- **⌃⌥Space** — toggle the overlay on/off from any app, any workspace
+- **⌘⇧Space** — toggle the overlay on/off from any app, any workspace
 - **Multi-provider** — switch between Ollama (local), Gemini, and Groq in one click
 - **Streaming responses** — answers appear token-by-token in real time
 - **Stop generation** — click the stop button mid-response to cancel instantly
@@ -96,7 +96,7 @@ npm start
 
 | Shortcut | Action |
 |----------|--------|
-| `⌃⌥Space` | Show / hide overlay |
+| `⌘⇧Space` | Show / hide overlay |
 | `⌘⇧S` | Capture screenshot & attach to next message |
 | `Enter` | Send message |
 | `Shift+Enter` | New line in message |
