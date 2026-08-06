@@ -129,7 +129,7 @@ async function switchProvider(p) {
         groqKeyInput.value = cfg.groqApiKey;
         await loadGroqModels();
       } else {
-        window.electronAPI.openSettings();
+        window.electronAPI.showLauncher();
         showInfo('Enter your Groq API key in the Settings window ⚙');
       }
     } else {
@@ -145,7 +145,7 @@ async function switchProvider(p) {
         apiKeyInput.value = cfg.geminiApiKey;
         await loadGeminiModels();
       } else {
-        window.electronAPI.openSettings();
+        window.electronAPI.showLauncher();
         showInfo('Enter your Gemini API key in the Settings window ⚙');
       }
     } else {
@@ -169,7 +169,7 @@ async function openSettingsAndPopulate() {
     groqApiKey = freshConfig.groqApiKey;
     groqKeyInput.value = freshConfig.groqApiKey;
   }
-  window.electronAPI.openSettings();
+  window.electronAPI.showLauncher();
 }
 
 settingsBtn.addEventListener('click', openSettingsAndPopulate);
@@ -701,11 +701,11 @@ async function sendMessage() {
   const model = modelSelect.value;
   if (!model) { showError('Please select a model first.'); return; }
   if (currentProvider === 'gemini' && !geminiApiKey) {
-    window.electronAPI.openSettings();
+    window.electronAPI.showLauncher();
     showError('⚠️ Enter your Gemini API key first.'); return;
   }
   if (currentProvider === 'groq' && !groqApiKey) {
-    window.electronAPI.openSettings();
+    window.electronAPI.showLauncher();
     showError('⚠️ Enter your Groq API key first.'); return;
   }
 

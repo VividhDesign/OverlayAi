@@ -48,7 +48,6 @@ function getConfigPath() {
     // One-time migration: copy keys from old location if userData config doesn't exist yet
     const legacyPaths = [
       path.join(__dirname, 'config.json'),
-      '/Users/vividhyadav/Projects/OverlayAi/config.json',
     ];
     if (!fs.existsSync(CONFIG_PATH)) {
       for (const lp of legacyPaths) {
@@ -374,6 +373,3 @@ ipcMain.handle('update-shortcuts', (_, { toggleKey, screenshotKey }) => {
     throw new Error('Shortcut save failed: ' + e.message);
   }
 });
-
-// Kept for backward compat (settings window from overlay gear icon)
-ipcMain.on('open-settings-window', () => showLauncher());

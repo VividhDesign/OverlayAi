@@ -4,7 +4,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hideWindow:      ()          => ipcRenderer.send('hide-window'),
   quitApp:         ()          => ipcRenderer.send('quit-app'),
   resizeWindow:    (w, h)      => ipcRenderer.send('resize-window', { width: w, height: h }),
-  openSettings:    ()          => ipcRenderer.send('show-launcher'),   // opens launcher home
   showLauncher:    ()          => ipcRenderer.send('show-launcher'),
   getConfig:       ()          => ipcRenderer.invoke('get-config'),
   saveConfig:      (data)      => ipcRenderer.invoke('save-config', data),
